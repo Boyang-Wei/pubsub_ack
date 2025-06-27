@@ -8,6 +8,15 @@ dotenv.config();
 
 const config = Config.getInstance();
 
+interface PubSubMessage {
+  message: {
+    data: string;
+    messageId?: string;
+    publishTime?: any;
+  };
+  ackId: string;
+}
+
 interface PubSubConfig {
   projectId: string;
   subscriptionName: string;
@@ -84,7 +93,7 @@ export async function test15MinProcessing() {
   let isProcessing = false;
 
   // 拉取消息函数（参考代码的方式）
-  async function pullMessage() {
+  async function pullMessage(): Promise<PubSubMessage | null> {
     const request = {
       subscription: formattedSubscription,
       maxMessages: 1,
@@ -98,7 +107,7 @@ export async function test15MinProcessing() {
         return null;
       }
 
-      return response.receivedMessages[0];
+      return response.receivedMessages[0] as PubSubMessage;
     } catch (error) {
       logError('拉取消息失败', error);
       return null;
@@ -106,7 +115,7 @@ export async function test15MinProcessing() {
   }
 
   // 延长ACK期限函数（参考代码的方式）
-  async function extendAckDeadline(message: any): Promise<boolean> {
+  async function extendAckDeadline(message: PubSubMessage): Promise<boolean> {
     const modifyAckRequest = {
       subscription: formattedSubscription,
       ackIds: [message.ackId],
@@ -123,7 +132,7 @@ export async function test15MinProcessing() {
   }
 
   // 确认消息函数（参考代码的方式）
-  async function acknowledgeMessage(message: any): Promise<boolean> {
+  async function acknowledgeMessage(message: PubSubMessage): Promise<boolean> {
     const ackRequest = {
       subscription: formattedSubscription,
       ackIds: [message.ackId],
@@ -139,7 +148,7 @@ export async function test15MinProcessing() {
   }
 
   // 开始延长定时器（参考代码的方式）
-  function startExtensionTimer(message: any): void {
+  function startExtensionTimer(message: PubSubMessage): void {
     extensionTimer = setInterval(async () => {
       try {
         const success = await extendAckDeadline(message);
@@ -169,20 +178,19 @@ export async function test15MinProcessing() {
   }
 
   // 处理单条消息（参考代码的方式）
-  async function processMessage(message: any): Promise<void> {
+  async function processMessage(message: PubSubMessage): Promise<void> {
     isProcessing = true;
     extensionCount = 0;
 
     try {
       // 解析消息内容
-      const messageData = message.message?.data ? 
-        message.message.data.toString() : '无数据';
-      const publishTime = message.message?.publishTime ? 
+      const messageData = message.message.data || '无数据';
+      const publishTime = message.message.publishTime ? 
         new Date(message.message.publishTime.toDate()).toLocaleString() : 
         '未知时间';
       
       logInfo('📨 收到消息:');
-      logInfo(`   ID: ${message.message?.messageId}`);
+      logInfo(`   ID: ${message.message.messageId || '未知'}`);
       logInfo(`   发布时间: ${publishTime}`);
       logInfo(`   数据长度: ${messageData.length} 字符`);
       logInfo(`   数据内容: ${messageData.substring(0, 200)}${messageData.length > 200 ? '...' : ''}`);
