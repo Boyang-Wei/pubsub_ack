@@ -15,9 +15,10 @@ Google Cloud PubSubのACK期限設定をテストするためのTypeScriptプロ
 
 ### 3. **15分処理テスト** (`npm run test-15min`)
 - 15分間のメッセージ処理をシミュレート
+- **v1.SubscriberClient**を使用
+- **毎分自動的に租期を延長**（60秒に設定）
 - 処理進捗を30秒ごとに表示
-- ACK期限タイムアウトの状況をテスト
-- 予想結果: メッセージの再配信（15分 > 10秒ACK期限のため）
+- 予想結果: メッセージの再配信なし（租期延長により）
 
 ## 🚀 セットアップ
 
@@ -43,6 +44,26 @@ npm run build
 GOOGLE_CLOUD_PROJECT_ID=your-project-id
 PUBSUB_TOPIC_NAME=diamond-kla-scraping-requests
 PUBSUB_SUBSCRIPTION_NAME=diamond-kla-scraper-worker
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/service-account-key.json
+```
+
+### Google Cloud認証の設定
+
+#### 方法1: 環境変数を使用（推奨）
+共有環境での使用に適しています：
+
+```bash
+# 環境変数にサービスアカウントキーファイルのパスを設定
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/service-account-key.json"
+
+# または、.envファイルに追加
+echo "GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/service-account-key.json" >> .env
+```
+
+#### 方法2: デフォルト認証を使用
+```bash
+# Google Cloud CLIで認証
+gcloud auth application-default login
 ```
 
 ## 📖 使用方法
@@ -62,9 +83,9 @@ npm run check-pending
 npm run check-pending-details
 ```
 
-### 15分処理テスト
+### 15分処理テスト（租期延長機能付き）
 ```bash
-# 15分間の処理をシミュレート
+# 15分間の処理をシミュレート（毎分租期延長）
 npm run test-15min
 ```
 
@@ -76,25 +97,36 @@ npm run test-15min
 - **サブスクリプション名**: `diamond-kla-scraper-worker`
 - **ACK期限**: 10秒（デフォルト）
 
+### 認証設定
+- **GOOGLE_APPLICATION_CREDENTIALS**: サービスアカウントキーファイルのパス
+- **認証方式**: 環境変数優先、デフォルト認証フォールバック
+
 ### テスト設定
 - **処理時間**: 15分（900秒）
+- **租期延長間隔**: 毎分（60秒）
+- **延長後のACK期限**: 60秒
 - **進捗表示間隔**: 30秒
 - **タイムアウト**: 16分
 
 ## 📊 テスト結果の解釈
 
-### 15分処理テスト
-1. **メッセージ受信**: サブスクリプションからメッセージを受信
+### 15分処理テスト（租期延長機能付き）
+1. **メッセージ受信**: v1.SubscriberClientでメッセージを受信
 2. **処理開始**: 15分間の処理をシミュレート
-3. **進捗表示**: 30秒ごとに処理進捗を表示
-4. **ACK期限超過**: 10秒のACK期限を超過
-5. **再配信**: メッセージが再配信される可能性
-6. **処理完了**: 15分後にメッセージをACK
+3. **租期延長**: 毎分自動的にACK期限を60秒に延長
+4. **進捗表示**: 30秒ごとに処理進捗を表示
+5. **処理完了**: 15分後にメッセージをACK
 
 ### 期待される動作
-- ACK期限（10秒）を超過するため、メッセージが再配信される
-- Google Cloud Consoleで再配信を確認できる
+- 毎分租期を延長するため、メッセージが再配信されない
 - 処理完了後にメッセージが正常にACKされる
+- 長時間処理でも安全にメッセージを保持
+
+### 租期延長の仕組み
+- **初期ACK期限**: 10秒
+- **延長間隔**: 毎分
+- **延長後の期限**: 60秒
+- **延長方法**: `modifyAckDeadline` APIを使用
 
 ## 🛠️ 開発
 
@@ -106,8 +138,14 @@ src/
 ├── types.ts               # 型定義
 ├── clear-messages.ts      # メッセージクリア機能
 ├── check-pending-messages.ts  # 未取得メッセージチェック
-└── test-15min-processing.ts   # 15分処理テスト
+└── test-15min-processing.ts   # 15分処理テスト（租期延長機能付き）
 ```
+
+### 使用技術
+- **v1.SubscriberClient**: Google Cloud PubSubの低レベルAPI
+- **streamingPull**: リアルタイムメッセージ受信
+- **modifyAckDeadline**: ACK期限の動的延長
+- **dotenv**: 環境変数管理
 
 ### ビルド
 ```bash
@@ -123,16 +161,31 @@ npm start
 ### よくある問題
 
 1. **認証エラー**
-   - Google Cloud認証が正しく設定されているか確認
-   - サービスアカウントキーが有効か確認
+   - `GOOGLE_APPLICATION_CREDENTIALS`環境変数が正しく設定されているか確認
+   - サービスアカウントキーファイルが存在し、有効か確認
+   - ファイルのJSON形式が正しいか確認
 
 2. **メッセージが受信されない**
    - トピックにメッセージが存在するか確認
    - サブスクリプション名が正しいか確認
+   - プロジェクトIDが正しいか確認
 
-3. **ACK期限エラー**
-   - 処理時間がACK期限を超過していないか確認
-   - サブスクリプションのACK期限設定を確認
+3. **租期延長エラー**
+   - ネットワーク接続が安定しているか確認
+   - PubSub APIの権限が十分か確認
+   - エラーログを確認
+
+### 認証の確認
+```bash
+# 環境変数が設定されているか確認
+echo $GOOGLE_APPLICATION_CREDENTIALS
+
+# サービスアカウントキーファイルの存在確認
+ls -la $GOOGLE_APPLICATION_CREDENTIALS
+
+# JSON形式の確認
+cat $GOOGLE_APPLICATION_CREDENTIALS | jq .
+```
 
 ### ログの確認
 すべての操作は詳細なログを出力します。エラーが発生した場合は、ログメッセージを確認してください。
@@ -142,7 +195,8 @@ npm start
 - このプロジェクトはテスト目的で作成されています
 - 本番環境での使用は推奨されません
 - ACK期限の設定は慎重に行ってください
-- メッセージの再配信は追加コストが発生する可能性があります
+- 租期延長機能により、長時間処理でもメッセージの再配信を防げます
+- 共有環境では`GOOGLE_APPLICATION_CREDENTIALS`環境変数の使用を推奨します
 
 ## 🤝 貢献
 

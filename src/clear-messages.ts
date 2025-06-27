@@ -2,6 +2,10 @@ import { Config } from './config';
 import { logInfo, logError } from './logger';
 import { PubSub } from '@google-cloud/pubsub';
 import dayjs from 'dayjs';
+import * as dotenv from 'dotenv';
+
+// 加载.env文件
+dotenv.config();
 
 const config = Config.getInstance();
 
@@ -11,7 +15,35 @@ export async function clearMessages() {
   const subscriptionName = config.getSubscriptionName();
   logInfo(`订阅名称: ${subscriptionName}`);
 
+  // 检查环境变量中的credential路径
+  const credentialPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (credentialPath) {
+    logInfo(`使用环境变量中的credential文件: ${credentialPath}`);
+    
+    // 验证文件是否存在
+    try {
+      const fs = require('fs');
+      if (!fs.existsSync(credentialPath)) {
+        logError(`❌ Credential文件不存在: ${credentialPath}`);
+        throw new Error(`Credential文件不存在: ${credentialPath}`);
+      }
+      
+      // 读取并验证JSON格式
+      const credentialContent = fs.readFileSync(credentialPath, 'utf8');
+      JSON.parse(credentialContent); // 验证JSON格式
+      
+      logInfo('✅ Credential文件验证成功');
+    } catch (error) {
+      logError('❌ Credential文件验证失败', error);
+      throw error;
+    }
+  } else {
+    logInfo('使用默认认证方式');
+  }
+
+  // 配置PubSub客户端
   const pubSubClient = new PubSub();
+
   const subscription = pubSubClient.subscription(subscriptionName, {
     flowControl: {
       maxMessages: 100, // 一次拉取更多消息
