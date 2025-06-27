@@ -1,0 +1,24 @@
+{
+  "name": "pubsub-ack-test",
+  "version": "1.0.0",
+  "description": "测试PubSub ack期限设置",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "clear": "ts-node src/clear-messages.ts",
+    "check-pending": "ts-node src/check-pending-messages.ts",
+    "check-pending-details": "ts-node src/check-pending-messages.ts --details",
+    "test-15min": "ts-node src/test-15min-processing.ts"
+  },
+  "dependencies": {
+    "@google-cloud/pubsub": "^4.0.0",
+    "dayjs": "^1.11.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^4.9.0"
+  }
+} 
