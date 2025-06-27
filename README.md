@@ -1,113 +1,153 @@
-# PubSub ACK期限测试项目
+# PubSub ACK期限テスト
 
-这个项目用于测试Google Cloud PubSub的ACK期限设置功能。
+Google Cloud PubSubのACK期限設定をテストするためのTypeScriptプロジェクトです。
 
-## 项目结构
+## 📋 機能
 
-```
-├── src/
-│   ├── config.ts          # 配置管理
-│   ├── logger.ts          # 日志服务
-│   ├── types.ts           # 类型定义
-│   ├── publisher.ts       # 消息发布者
-│   └── subscriber.ts      # 消息订阅者
-├── package.json
-├── tsconfig.json
-├── env.example
-└── README.md
-```
+### 1. **メッセージクリア** (`npm run clear`)
+- サブスクリプション内のすべてのメッセージを詳細表示してクリア
+- 各メッセージのID、公開時間、データ内容を表示
+- 自動的にACKしてメッセージを削除
 
-## 安装依赖
+### 2. **未取得メッセージチェック** (`npm run check-pending`)
+- サブスクリプション内の未処理メッセージをチェック
+- 詳細モード: `npm run check-pending-details`
 
+### 3. **15分処理テスト** (`npm run test-15min`)
+- 15分間のメッセージ処理をシミュレート
+- 処理進捗を30秒ごとに表示
+- ACK期限タイムアウトの状況をテスト
+- 予想結果: メッセージの再配信（15分 > 10秒ACK期限のため）
+
+## 🚀 セットアップ
+
+### 前提条件
+- Node.js (v14以上)
+- Google Cloud Project
+- PubSub Topic: `diamond-kla-scraping-requests`
+- PubSub Subscription: `diamond-kla-scraper-worker`
+
+### インストール
 ```bash
+# 依存関係をインストール
 npm install
+
+# TypeScriptをビルド
+npm run build
 ```
 
-## 配置
+### 環境変数の設定
+`.env`ファイルを作成し、以下を設定してください：
 
-1. 复制环境变量示例文件：
-```bash
-cp env.example .env
-```
-
-2. 编辑 `.env` 文件，设置你的GCP项目信息：
 ```env
-GOOGLE_CLOUD_PROJECT=your-project-id
-TOPIC_NAME=diamond-kla-scraping-requests
-SUBSCRIPTION_NAME=diamond-kla-scraper-worker
-ACK_DEADLINE_SECONDS=120
+GOOGLE_CLOUD_PROJECT_ID=your-project-id
+PUBSUB_TOPIC_NAME=diamond-kla-scraping-requests
+PUBSUB_SUBSCRIPTION_NAME=diamond-kla-scraper-worker
 ```
 
-3. 确保你有GCP的认证凭据（可以通过 `gcloud auth application-default login` 设置）
+## 📖 使用方法
 
-## 使用方法
-
-### 1. 发送测试消息
-
+### メッセージのクリア
 ```bash
-npm run publish
+# すべてのメッセージをクリア
+npm run clear
 ```
 
-这会将一个测试消息发送到指定的topic。
-
-### 2. 启动订阅者（测试ACK期限）
-
+### 未取得メッセージのチェック
 ```bash
-npm run subscribe
+# 未取得メッセージの数をチェック
+npm run check-pending
+
+# 詳細情報を表示
+npm run check-pending-details
 ```
 
-订阅者会：
-- 连接到指定的subscription
-- 设置ACK期限（默认120秒）
-- 模拟30秒的处理时间
-- 每5秒输出处理进度
-
-### 3. 测试ACK期限
-
-1. 首先启动订阅者：
+### 15分処理テスト
 ```bash
-npm run subscribe
+# 15分間の処理をシミュレート
+npm run test-15min
 ```
 
-2. 在另一个终端发送消息：
+## 🔧 設定
+
+### プロジェクト設定
+- **プロジェクトID**: Google Cloud ProjectのID
+- **トピック名**: `diamond-kla-scraping-requests`
+- **サブスクリプション名**: `diamond-kla-scraper-worker`
+- **ACK期限**: 10秒（デフォルト）
+
+### テスト設定
+- **処理時間**: 15分（900秒）
+- **進捗表示間隔**: 30秒
+- **タイムアウト**: 16分
+
+## 📊 テスト結果の解釈
+
+### 15分処理テスト
+1. **メッセージ受信**: サブスクリプションからメッセージを受信
+2. **処理開始**: 15分間の処理をシミュレート
+3. **進捗表示**: 30秒ごとに処理進捗を表示
+4. **ACK期限超過**: 10秒のACK期限を超過
+5. **再配信**: メッセージが再配信される可能性
+6. **処理完了**: 15分後にメッセージをACK
+
+### 期待される動作
+- ACK期限（10秒）を超過するため、メッセージが再配信される
+- Google Cloud Consoleで再配信を確認できる
+- 処理完了後にメッセージが正常にACKされる
+
+## 🛠️ 開発
+
+### ファイル構成
+```
+src/
+├── config.ts              # 設定管理
+├── logger.ts              # ログサービス
+├── types.ts               # 型定義
+├── clear-messages.ts      # メッセージクリア機能
+├── check-pending-messages.ts  # 未取得メッセージチェック
+└── test-15min-processing.ts   # 15分処理テスト
+```
+
+### ビルド
 ```bash
-npm run publish
+# TypeScriptをコンパイル
+npm run build
+
+# 実行
+npm start
 ```
 
-3. 观察订阅者的输出，验证ACK期限是否生效
+## 🔍 トラブルシューティング
 
-## 测试场景
+### よくある問題
 
-### 场景1：正常ACK期限
-- 设置ACK期限为120秒
-- 处理时间为30秒
-- 预期结果：消息成功处理并ACK
+1. **認証エラー**
+   - Google Cloud認証が正しく設定されているか確認
+   - サービスアカウントキーが有効か確認
 
-### 场景2：ACK期限不足
-- 设置ACK期限为10秒
-- 处理时间为30秒
-- 预期结果：消息超时，重新投递
+2. **メッセージが受信されない**
+   - トピックにメッセージが存在するか確認
+   - サブスクリプション名が正しいか確認
 
-### 场景3：边界测试
-- 设置ACK期限为30秒
-- 处理时间为30秒
-- 预期结果：刚好在期限内完成
+3. **ACK期限エラー**
+   - 処理時間がACK期限を超過していないか確認
+   - サブスクリプションのACK期限設定を確認
 
-## 注意事项
+### ログの確認
+すべての操作は詳細なログを出力します。エラーが発生した場合は、ログメッセージを確認してください。
 
-1. 确保GCP项目中有对应的topic和subscription
-2. 确保有足够的权限访问PubSub
-3. 测试时注意观察日志输出，了解ACK期限的实际效果
-4. 可以通过修改 `.env` 文件中的 `ACK_DEADLINE_SECONDS` 来测试不同的期限设置
+## 📝 注意事項
 
-## 故障排除
+- このプロジェクトはテスト目的で作成されています
+- 本番環境での使用は推奨されません
+- ACK期限の設定は慎重に行ってください
+- メッセージの再配信は追加コストが発生する可能性があります
 
-如果遇到认证问题：
-```bash
-gcloud auth application-default login
-```
+## 🤝 貢献
 
-如果遇到权限问题，确保服务账号有以下权限：
-- `pubsub.subscriber`
-- `pubsub.publisher`
-- `pubsub.viewer` 
+バグ報告や機能要望は、Issueとして報告してください。
+
+## 📄 ライセンス
+
+このプロジェクトはMITライセンスの下で公開されています。 
